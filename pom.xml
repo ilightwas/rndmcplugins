@@ -24,6 +24,7 @@
   <modules>
     <module>qquit</module>
     <module>noproptimestamp</module>
+    <module>proxysrv</module>
   </modules>
 
   <repositories>
@@ -154,6 +155,19 @@
               <arguments>
                 <argument>${project.build.directory}/${project.build.finalName}.${project.packaging}</argument>
                 <argument>${SERVER2SSH}:${SERVER2PATH}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>3</id>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>scp</executable>
+              <arguments>
+                <argument>${project.build.directory}/${project.build.finalName}.${project.packaging}</argument>
+                <argument>${SERVER3SSH}:${SERVER3PATH}</argument>
               </arguments>
             </configuration>
           </execution>
