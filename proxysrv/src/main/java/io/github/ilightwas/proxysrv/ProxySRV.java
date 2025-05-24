@@ -160,8 +160,13 @@ public class ProxySRV {
         byteArr.writeUTF(data.userName);
         byteArr.writeLong(data.uuidMSB);
         byteArr.writeLong(data.uuidLSB);
-        byteArr.writeInt(data.texture.length);
-        byteArr.write(data.texture);
+        if (data.texture == null) {
+            byteArr.writeInt(0);
+            logger.warn("No texture found for player: {}", data.userName);
+        } else {
+            byteArr.writeInt(data.texture.length);
+            byteArr.write(data.texture);
+        }
 
         proxy.getScheduler().buildTask(this, () -> {
             for (RegisteredServer server : filteredServers) {
