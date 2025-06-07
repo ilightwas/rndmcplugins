@@ -18,12 +18,15 @@ import com.google.common.io.ByteStreams;
 import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
+import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.ServerConnection;
+import com.velocitypowered.api.proxy.messages.ChannelMessageSource;
 import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 
@@ -53,7 +56,8 @@ public class ProxySRV {
 
     public enum ProxyEvent {
         JOIN((byte) 1),
-        QUIT((byte) 2);
+        QUIT((byte) 2),
+        DEATH((byte) 3);
 
         private final byte opcode;
 
@@ -61,7 +65,7 @@ public class ProxySRV {
             this.opcode = opcode;
         }
 
-        byte opcode() {
+        public byte opcode() {
             return opcode;
         }
 
@@ -142,6 +146,52 @@ public class ProxySRV {
     @Subscribe
     public void onQuit(final DisconnectEvent event) {
         messageDiscordSRV(prepareData(event.getPlayer()), ProxyEvent.QUIT);
+    }
+
+    @Subscribe
+    public void onPluginMessageFromBackend(PluginMessageEvent event) {
+        if (!CHANNEL_ID.equals(event.getIdentifier())) {
+            return;
+        }
+
+        event.setResult(PluginMessageEvent.ForwardResult.handled());
+        byte[] data = event.getData();
+        ProxyEvent e = null;
+        try {
+            e = ProxyEvent.fromOpcode(data[0]);
+        } catch (IllegalArgumentException ex) {
+            logger.error("Invalid ProxyEvent in plugin message: ", ex);
+            return;
+        }
+
+        if (e != ProxyEvent.DEATH) {
+            logger.warn("Received unsupported ProxyEvent on proxy side");
+            return;
+        }
+
+        ChannelMessageSource source = event.getSource();
+        ServerConnection serverConnection = null;
+
+        if (source instanceof ServerConnection) {
+            serverConnection = (ServerConnection) source;
+        } else {
+            if (source instanceof Player) {
+                Player p = (Player) source;
+                logger.warn(p.getUsername() + " tried to send a message in the plugin channel");
+                return;
+            }
+            logger.warn("Unknown source tried to send a message in the plugin channel");
+            return;
+        }
+
+        final String sourceServer = serverConnection.getServerInfo().getName();
+        for (RegisteredServer otherServer : filteredServers) {
+            if (sourceServer.equals(otherServer.getServerInfo().getName())) {
+                // skip source server
+                continue;
+            }
+            otherServer.sendPluginMessage(CHANNEL_ID, data);
+        }
     }
 
     private static EventData prepareData(final Player player) {
